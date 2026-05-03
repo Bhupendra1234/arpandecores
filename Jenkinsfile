@@ -2,19 +2,25 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME    = "arpandecores"
-        IMAGE_TAG     = "latest"
+        IMAGE_NAME     = "arpandecores"
+        IMAGE_TAG      = "latest"
         CONTAINER_NAME = "arpandecores"
-        PORT          = "3000"
+        PORT           = "3000"
     }
 
     stages {
 
         stage('Checkout Code') {
             steps {
+                cleanWs()   // ✅ Always start fresh
                 echo "Cloning repository..."
-                git branch: 'main',
-                    url: 'https://github.com/Bhupendra1234/arpandecores.git'
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/Bhupendra1234/arpandecores.git'
+                    ]]
+                ])
             }
         }
 
@@ -67,8 +73,8 @@ pipeline {
             echo "✅ Deployment Successful! App running on port ${env.PORT}"
         }
         failure {
-            echo "❌ Deployment Failed! Check logs:"
             sh "docker logs ${env.CONTAINER_NAME} || true"
+            echo "❌ Deployment Failed!"
         }
     }
 }
