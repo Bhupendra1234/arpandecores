@@ -12,15 +12,9 @@ pipeline {
 
         stage('Checkout Code') {
             steps {
-                cleanWs()   // ✅ Always start fresh
-                echo "Cloning repository..."
-                checkout([
-                    $class: 'GitSCM',
-                    branches: [[name: '*/main']],
-                    userRemoteConfigs: [[
-                        url: 'https://github.com/Bhupendra1234/arpandecores.git'
-                    ]]
-                ])
+                cleanWs()
+                git branch: 'main',
+                    url: 'https://github.com/Bhupendra1234/arpandecores.git'
             }
         }
 
