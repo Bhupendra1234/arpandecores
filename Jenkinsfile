@@ -2,29 +2,25 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME     = "arpandecores"
-        IMAGE_TAG      = "latest"
-        CONTAINER_NAME = "arpandecores"
-        PORT           = "3000"
+        IMAGE_NAME = "arpandecores"
+        IMAGE_TAG = "latest"
     }
 
     stages {
 
         stage('Checkout Code') {
             steps {
-                cleanWs()
+                echo "Cloning repository..."
                 git branch: 'main',
                     url: 'https://github.com/Bhupendra1234/arpandecores.git'
             }
         }
 
-        stage('Clean Old Container & Image') {
+        stage('Clean Old Image') {
             steps {
                 script {
                     sh """
-                        docker stop ${env.CONTAINER_NAME} || true
-                        docker rm   ${env.CONTAINER_NAME} || true
-                        docker rmi -f ${env.IMAGE_NAME}:${env.IMAGE_TAG} || true
+                    docker rmi -f $IMAGE_NAME:$IMAGE_TAG || true
                     """
                 }
             }
@@ -33,41 +29,38 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 echo "Building Docker image..."
-                sh "docker build -t ${env.IMAGE_NAME}:${env.IMAGE_TAG} ."
+                sh """
+                docker build -t $IMAGE_NAME:$IMAGE_TAG .
+                """
             }
         }
 
         stage('Run Container') {
             steps {
+                echo "Stopping old container if running..."
+                sh """
+                docker stop arpandecores || true
+                docker rm arpandecores || true
+                """
+
                 echo "Running new container..."
                 sh """
-                    docker run -d \
-                      --name ${env.CONTAINER_NAME} \
-                      --restart unless-stopped \
-                      -p ${env.PORT}:3000 \
-                      ${env.IMAGE_NAME}:${env.IMAGE_TAG}
+                docker run -d \
+                  --name arpandecores \
+                  -p 3000:3000 \
+                  $IMAGE_NAME:$IMAGE_TAG
                 """
             }
         }
 
-        stage('Health Check') {
-            steps {
-                echo "Waiting for app to start..."
-                sh """
-                    sleep 5
-                    curl -f http://localhost:${env.PORT} || \
-                        (echo '❌ Health check failed!' && exit 1)
-                """
-            }
-        }
     }
 
     post {
         success {
-            echo "✅ Deployment Successful! App running on port ${env.PORT}"
+            echo "✅ Deployment Successful!"
         }
+
         failure {
-            sh "docker logs ${env.CONTAINER_NAME} || true"
             echo "❌ Deployment Failed!"
         }
     }
