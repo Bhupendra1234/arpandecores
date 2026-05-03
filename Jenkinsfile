@@ -3,7 +3,9 @@ pipeline {
 
     environment {
         IMAGE_NAME = "arpandecores"
-        IMAGE_TAG = "latest"
+        IMAGE_TAG = "build-${BUILD_NUMBER}"   // unique tag per build
+        CONTAINER_NAME = "arpandecores"
+        PORT = "3000"
     }
 
     stages {
@@ -16,11 +18,19 @@ pipeline {
             }
         }
 
-        stage('Clean Old Image') {
+        stage('Clean Old Container & Image') {
             steps {
                 script {
                     sh """
-                    docker rmi -f $IMAGE_NAME:$IMAGE_TAG || true
+                    echo "Stopping and removing old container..."
+                    docker stop ${CONTAINER_NAME} || true
+                    docker rm ${CONTAINER_NAME} || true
+
+                    echo "Removing old images..."
+                    docker rmi -f ${IMAGE_NAME}:latest || true
+
+                    echo "Pruning dangling images..."
+                    docker image prune -f || true
                     """
                 }
             }
@@ -28,27 +38,33 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                echo "Building Docker image..."
+                echo "Building Docker image: ${IMAGE_NAME}:${IMAGE_TAG}"
                 sh """
-                docker build -t $IMAGE_NAME:$IMAGE_TAG .
+                docker build -t ${IMAGE_NAME}:${IMAGE_TAG} -t ${IMAGE_NAME}:latest .
                 """
             }
         }
 
         stage('Run Container') {
             steps {
-                echo "Stopping old container if running..."
-                sh """
-                docker stop arpandecores || true
-                docker rm arpandecores || true
-                """
-
                 echo "Running new container..."
                 sh """
                 docker run -d \
-                  --name arpandecores \
-                  -p 3000:3000 \
-                  $IMAGE_NAME:$IMAGE_TAG
+                  --name ${CONTAINER_NAME} \
+                  --restart unless-stopped \
+                  -p ${PORT}:${PORT} \
+                  ${IMAGE_NAME}:${IMAGE_TAG}
+                """
+            }
+        }
+
+        stage('Health Check') {
+            steps {
+                echo "Waiting for container to start..."
+                sh """
+                sleep 5
+                docker ps | grep ${CONTAINER_NAME} || (echo "Container not running!" && exit 1)
+                echo "Container is up and running on port ${PORT}"
                 """
             }
         }
@@ -57,11 +73,12 @@ pipeline {
 
     post {
         success {
-            echo "✅ Deployment Successful!"
+            echo "✅ Deployment Successful! App running on port ${PORT} | Build: ${BUILD_NUMBER}"
         }
 
         failure {
-            echo "❌ Deployment Failed!"
+            echo "❌ Deployment Failed! Check logs with: docker logs ${CONTAINER_NAME}"
+            sh "docker logs ${CONTAINER_NAME} || true"
         }
     }
 }
