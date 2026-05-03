@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         IMAGE_NAME = "arpandecores"
-        IMAGE_TAG = "build-${BUILD_NUMBER}"   // unique tag per build
+        IMAGE_TAG = "build-${BUILD_NUMBER}"
         CONTAINER_NAME = "arpandecores"
         PORT = "3000"
     }
@@ -18,21 +18,14 @@ pipeline {
             }
         }
 
-        stage('Clean Old Container & Image') {
+        stage('Cleanup Workspace') {
             steps {
-                script {
-                    sh """
-                    echo "Stopping and removing old container..."
-                    docker stop ${CONTAINER_NAME} || true
-                    docker rm ${CONTAINER_NAME} || true
-
-                    echo "Removing old images..."
-                    docker rmi -f ${IMAGE_NAME}:latest || true
-
-                    echo "Pruning dangling images..."
-                    docker image prune -f || true
-                    """
-                }
+                sh """
+                docker stop ${CONTAINER_NAME} || true
+                docker rm ${CONTAINER_NAME} || true
+                docker rmi -f ${IMAGE_NAME}:latest || true
+                docker image prune -f || true
+                """
             }
         }
 
@@ -47,7 +40,6 @@ pipeline {
 
         stage('Run Container') {
             steps {
-                echo "Running new container..."
                 sh """
                 docker run -d \
                   --name ${CONTAINER_NAME} \
@@ -60,11 +52,20 @@ pipeline {
 
         stage('Health Check') {
             steps {
-                echo "Waiting for container to start..."
                 sh """
                 sleep 5
                 docker ps | grep ${CONTAINER_NAME} || (echo "Container not running!" && exit 1)
-                echo "Container is up and running on port ${PORT}"
+                echo "App running on port ${PORT}"
+                """
+            }
+        }
+
+        stage('Cleanup Old Images') {
+            steps {
+                sh """
+                docker images ${IMAGE_NAME} --format '{{.Tag}}' | \
+                grep 'build-' | sort -t- -k2 -n | head -n -3 | \
+                xargs -I {} docker rmi ${IMAGE_NAME}:{} || true
                 """
             }
         }
@@ -73,11 +74,10 @@ pipeline {
 
     post {
         success {
-            echo "✅ Deployment Successful! App running on port ${PORT} | Build: ${BUILD_NUMBER}"
+            echo "✅ Deployment Successful! Build #${BUILD_NUMBER} running on port ${PORT}"
         }
-
         failure {
-            echo "❌ Deployment Failed! Check logs with: docker logs ${CONTAINER_NAME}"
+            echo "❌ Deployment Failed!"
             sh "docker logs ${CONTAINER_NAME} || true"
         }
     }
