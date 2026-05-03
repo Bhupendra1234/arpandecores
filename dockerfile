@@ -6,7 +6,7 @@ FROM node:20-alpine AS deps
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --only=production  # ci is faster & more reliable than install
+RUN npm ci --only=production
 
 # =========================
 # 2. Build Stage
@@ -30,7 +30,7 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV HOSTNAME="0.0.0.0"   # ✅ Required for Next.js to bind correctly in Docker
+ENV HOSTNAME="0.0.0.0"
 ENV PORT=3000
 
 # Add non-root user for security
@@ -45,7 +45,7 @@ COPY --from=builder /app/public ./public
 # Set correct permissions
 RUN chown -R nextjs:nodejs /app
 
-USER nextjs  # ✅ Run as non-root
+USER nextjs
 
 EXPOSE 3000
 
